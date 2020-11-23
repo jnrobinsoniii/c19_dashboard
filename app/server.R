@@ -104,6 +104,31 @@ server <- shinyServer(function(input, output, session) {
         print(rate)
         rate
     })
+
+    # Will return the avg monthly increase in positive cases normalized to population
+    ratePerCapita1Month <- reactive({
+        df <- slice(frameRates(), 1:30)
+        avg = sum(df$positiveIncrease) / 30
+        population = pop()$pop[0]
+        ratePerCapita = avg / population
+        ratePerCapita
+    })
+
+    #Will return an array of 4 per capita rates for the past 4 weeks. First element is the past week, last element is 4 weeks ago
+    ratePerCapitaWeeks <- reactive({
+        df <- frameRates()
+        population = pop()$pop[0];
+        weeks = 4
+        rates <- vector
+        for (week in 1:weeks){
+            #Get the correct week slice
+            slice <- slice(df, (week - 1) * 7 + 1, week * 7)
+            avg = sum(slice$positiveIncrease) / 7
+            ratePerCapita = avg / population
+            rates <- c(rates,ratePerCapita)
+        }
+        rates
+    })
     
     # Value Boxes for totals
     
