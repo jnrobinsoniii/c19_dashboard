@@ -1,6 +1,6 @@
 
 
-library(shiny)
+library(shiny) 
 library(flexdashboard)
 library(shinydashboard)
 library(highcharter)
@@ -9,17 +9,22 @@ library(xts)
 library(tbl2xts)
 library(USAboundaries)
 
+# Get an alphabetical list of names and abbreviations of states from the USAboundaries library to use for our State input and URLs
+stateList = state_codes[c(1:52,54,57,60,63),]
+alphaStates = select(stateList[order(stateList$state_name),], state_name, state_abbr)
+
 server <- shinyServer(function(input, output, session) {
     
-    stits <- reactive({
+    # Create reactive data frame that responds to State input value to obtain the proper state abbreviation for the URL
+    state_abbr <- reactive({
         dita <- data.frame()
         dita <- (filter(alphaStates, state_name == input$state))
         dita$state_abbr <- tolower(dita$state_abbr)
         dita
     })
     
-    # Create reactive element called "category" that filters the plot shown
     
+    # Create reactive element that responds to Category input to filter our data to the category shown
     category <- reactive({
         outcome = switch(input$category,
                          "Positive Cases Total" = "positive",
@@ -35,15 +40,18 @@ server <- shinyServer(function(input, output, session) {
         outcome
     })
     
-    # Create reactive element that imports the data from COVID Tracking Project API based on value of State input.
+    # Create reactive elements that imports the current and historical data from COVID Tracking Project API based on value of State input for the plot. 
     
+    # Plot data
     frameDaily <- reactive({
+        # Create dataframe
         if (input$state == "United States"){
-            df <- data_frame(read.csv(paste0("https://api.covidtracking.com/v1/us/daily.csv"))) # Create dataframe based on data imported 
+            df <- data_frame(read.csv(paste0("https://api.covidtracking.com/v1/us/daily.csv"))) 
         } else {
-            df <- data_frame(read.csv(paste0("https://api.covidtracking.com/v1/states/", stits()$state_abbr, "/daily.csv")))
+            df <- data_frame(read.csv(paste0("https://api.covidtracking.com/v1/states/", state_abbr()$state_abbr, "/daily.csv")))
         }
-        df$date <- as.Date(as.character(df$date), format = "%Y%m%d")  # format the date column of dataframe
+        # Format the date column of dataframe
+        df$date <- as.Date(as.character(df$date), format = "%Y%m%d")
         df <- select(df, one_of(c("date", toString(category())))) 
         df <- 
             df %>% 
@@ -51,61 +59,67 @@ server <- shinyServer(function(input, output, session) {
         df
     })
     
+    # Value box data
     frameCurrent <- reactive({
+        # Create dataframe
         if (input$state == "United States"){
-            df <- data_frame(read.csv(paste0("https://api.covidtracking.com/v1/us/current.csv"))) # Create dataframe based on current data for the Value Boxes
+            df <- data_frame(read.csv(paste0("https://api.covidtracking.com/v1/us/current.csv")))
         } else {
-            df <- data_frame(read.csv(paste0("https://api.covidtracking.com/v1/states/", stits()$state_abbr, "/current.csv")))
+            df <- data_frame(read.csv(paste0("https://api.covidtracking.com/v1/states/", state_abbr()$state_abbr, "/current.csv")))
         }
         df
     })
     
+    # Rate data
     frameRates <- reactive({
+        #Create dataframe
         if (input$state == "United States"){
-            df <- data_frame(read.csv(paste0("https://api.covidtracking.com/v1/us/daily.csv"))) # Create dataframe based on daily data for the Rates
+            df <- data_frame(read.csv(paste0("https://api.covidtracking.com/v1/us/daily.csv")))
         } else {
-            df <- data_frame(read.csv(paste0("https://api.covidtracking.com/v1/states/", stits()$state_abbr, "/daily.csv")))
+            df <- data_frame(read.csv(paste0("https://api.covidtracking.com/v1/states/", state_abbr()$state_abbr, "/daily.csv")))
         }
-        df$date <- as.Date(as.character(df$date), format = "%Y%m%d")  # format the date column of the dataframe
-        print(df)
+        # Format the date column of the dataframe
+        df$date <- as.Date(as.character(df$date), format = "%Y%m%d")
         df
     })
     
+    # Create a reactive element to get the populations of the nation, states, and territories
     pop <- reactive({
         df <- data_frame(read.csv("https://raw.githubusercontent.com/jnrobinsoniii/c19_dashboard/master/state_pop.csv", header = TRUE))
         df <- filter(df, state == input$state)
-        print(df)
         df
     })
     
+    # Create reactive elements that uses frame rate data to generate the values for the gauges
+    
+    # Create function to generate positivity rate based on last week.
     ratePositive <- reactive({
         df <- slice(frameRates(), 1:7)
         sum1 = sum(df$positive)
         sum2 = sum(df$negative)
         rate = signif((sum1 / (sum1 + sum2)) * 100, digits = 2)
-        print(rate)
         rate
     })
     
+    # Create function to generate testing rate based on last week.
     rateTest <- reactive({
         df <- slice(frameRates(), 1:7)
         sum1 = sum(df$positiveIncrease)
         sum2 = sum(df$negativeIncrease)
         rate = signif(((sum1 + sum2)/(pop()$pop)) * 100, digits = 2)
-        print(rate)
         rate
     })
     
+    # Create function to generate death rate based on last week.
     rateDeath <- reactive({
-        df <- slice(frameRates(), 1:7)
+        df <- slice(frameRates(), 1:7) 
         sum1 = sum(df$deathIncrease)
         sum2 = sum(df$positiveIncrease)
         rate = signif((sum1/sum2) * 100, digits = 2)
-        print(rate)
         rate
     })
     
-    # Value Boxes for totals
+    # Value boxes output for current data and totals
     
     output$vb1 <- renderValueBox({
         valueBox(format(frameCurrent()$positive, big.mark = ","), subtitle = "Positive Cases", color = "light-blue")
@@ -133,21 +147,12 @@ server <- shinyServer(function(input, output, session) {
     
     # Gauges for Rates
     
-    ratePositive <- reactive({
-        df <- slice(frameRates(), 1:7)
-        sum1 = sum(df$positive)
-        sum2 = sum(df$negative)
-        rate = signif((sum1 / (sum1 + sum2)) * 100, digits = 2)
-        print(rate)
-        rate
-    })
-    
     output$gauge1 <- renderGauge({
         gauge(ratePositive(), 
               min = 0,
               max = 100,
               symbol = '%',
-              label = "Positivity Rate")
+              label = "Past Positivity Rate")
     })
     
     output$gauge2 <- renderGauge({
@@ -155,7 +160,7 @@ server <- shinyServer(function(input, output, session) {
               min = 0,
               max = 100,
               symbol = '%',
-              label = "Total Positive Rate")
+              label = "Current Positive Rate")
     })
     
     output$gauge3 <- renderGauge({
@@ -199,7 +204,7 @@ server <- shinyServer(function(input, output, session) {
         lang
         
         if (input$state == "United States"){
-            hcopts <- getOption("highcharter.options")
+            hcopts <- getOption("highcharter.lang")
             hcopts
             hcopts$lang$thousandsSep <- ","
             options(highcharter.options = hcopts)
@@ -228,7 +233,7 @@ server <- shinyServer(function(input, output, session) {
                     )
                 )) %>%
                 hc_rangeSelector(enabled = TRUE) %>%
-                hc_add_series(name = (stits()$url), data = frameDaily())
+                hc_add_series(name = (state_abbr()$url), data = frameDaily())
             hc
         }
     })
