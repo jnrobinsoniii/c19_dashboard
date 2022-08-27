@@ -1,4 +1,3 @@
-# c19_dashboard
 # COVID-19 Timeline Dashboard
 
 A dashboard that was created as a part of the Rutgers IC CAE Summer Research Fellowship in 2020. 
